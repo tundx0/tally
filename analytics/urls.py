@@ -4,5 +4,5 @@ from . import views
 
 urlpatterns = [
     path("health/", views.health, name="health"),
-    # Day 2: register your capture endpoint and viewsets here.
+    path("capture/", views.CaptureView.as_view(), name="capture"),
 ]
