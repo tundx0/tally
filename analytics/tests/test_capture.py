@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+import pytest
 from django.urls import reverse
 from django.utils import timezone
 
@@ -163,3 +164,16 @@ def test_capture_rejects_get(api_client, project):
     response = api_client.get(reverse("capture"))
 
     assert response.status_code == 405
+
+
+@pytest.mark.parametrize("batch_size", [1, 1000])
+def test_capture_query_count_does_not_grow_with_batch_size(
+    api_client, project, django_assert_num_queries, batch_size
+):  # noqa: E501
+    payload = {
+        "api_key": project.api_key,
+        "batch": [make_event() for _ in range(batch_size)],
+    }
+    with django_assert_num_queries(2):
+        response = api_client.post(reverse("capture"), payload, format="json")
+        assert response.status_code == 200
