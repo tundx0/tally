@@ -4,7 +4,7 @@ import pytest
 from django.urls import reverse
 from django.utils import timezone
 
-from analytics.models import Event, Project
+from analytics.models import Event, Person, Project
 
 
 def make_event(**overrides):
@@ -174,6 +174,50 @@ def test_capture_query_count_does_not_grow_with_batch_size(
         "api_key": project.api_key,
         "batch": [make_event() for _ in range(batch_size)],
     }
-    with django_assert_num_queries(2):
+    with django_assert_num_queries(3):
         response = api_client.post(reverse("capture"), payload, format="json")
         assert response.status_code == 200
+
+
+def test_capture_creates_one_person_per_new_distinct_id(api_client, project):
+    payload = {
+        "api_key": project.api_key,
+        "batch": [
+            make_event(distinct_id="user_1"),
+            make_event(distinct_id="user_1"),
+            make_event(distinct_id="user_2"),
+        ],
+    }
+
+    response = api_client.post(reverse("capture"), payload, format="json")
+    assert response.status_code == 200
+    distinct_ids = Person.objects.filter(project=project).values_list("distinct_id", flat=True)
+    assert sorted(distinct_ids) == ["user_1", "user_2"]
+
+
+def test_capture_does_not_duplicate_or_change_existing_person(api_client, project):
+    Person.objects.create(project=project, distinct_id="user_1", properties={"name": "Ola"})
+    payload = {
+        "api_key": project.api_key,
+        "batch": [make_event(distinct_id="user_1")],
+    }
+
+    response = api_client.post(reverse("capture"), payload, format="json")
+
+    assert response.status_code == 200
+    person = Person.objects.get(project=project, distinct_id="user_1")
+    assert person.properties == {"name": "Ola"}
+
+
+def test_capture_rejected_batch_creates_no_persons(api_client, project):
+    bad_event = make_event()
+    bad_event.pop("event")
+    payload = {
+        "api_key": project.api_key,
+        "batch": [make_event(), bad_event],
+    }
+
+    response = api_client.post(reverse("capture"), payload, format="json")
+
+    assert response.status_code == 400
+    assert Person.objects.count() == 0

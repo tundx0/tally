@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .authentication import ProjectApiKeyAuthentication
-from .models import Event
+from .models import Event, Person
 from .serializers import CaptureSerializer
 
 
@@ -38,6 +38,20 @@ class CaptureView(APIView):
             )
             for item in serializer.validated_data["batch"]
         ]
+
+        # Why save persons before events? These are two separate INSERTs, so a crash between
+        # them leaves a partial write. This order makes that partial write safe to retry:
+        # - Persons first: a retry skips the existing persons (ignore_conflicts) and saves the
+        #   events, so the end result is clean.
+        # - Events first: a retry would save the same events a second time (duplicates).
+        # That is simpler than wrapping both INSERTs in a transaction.
+        # Note: this only covers a crash between the two INSERTs. Capture as a whole is
+        # at-least-once: a retry after a lost response still duplicates events.
+        distinct_ids = sorted({event.distinct_id for event in events})
+        Person.objects.bulk_create(
+            [Person(project=project, distinct_id=distinct_id) for distinct_id in distinct_ids],
+            ignore_conflicts=True,
+        )
 
         Event.objects.bulk_create(events)
 
