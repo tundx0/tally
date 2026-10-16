@@ -35,6 +35,35 @@ uv run celery -A config worker -l info
 | New migration after editing models | `uv run python manage.py makemigrations` |
 | See the SQL a migration runs | `uv run python manage.py sqlmigrate analytics 0001` |
 | Interactive shell with models loaded | `uv run python manage.py shell` |
+| Fill the database with fake events | `uv run python manage.py seed_events --events 1000000 --seed 1` |
+
+## Test data
+
+`seed_events` fills a project with realistic fake events, so you can try queries and measure performance on real volumes. Run it against your local database only.
+
+```bash
+uv run python manage.py seed_events --events 1000000 --seed 1
+```
+
+One million events take about a minute. The command prints its progress after every batch.
+
+What it creates:
+
+- **The project**, if no project with that name exists yet.
+- **One `Person` per user**, `user-1` to `user-<N>`. Existing persons are skipped.
+- **Events spread evenly over the last N days**, from random users, in realistic proportions: 80% `$pageview`, 10% `signed_up`, 5% `upgraded`, 5% `invited_teammate`.
+- **Properties on every event:** `$browser` is always set. `plan` (`free`, `pro` or `enterprise`) is set on 90% of events, so breakdowns always include a group with no value.
+
+| Option | Default | Description |
+|---|---|---|
+| `--project` | `Project-1` | Name of the project to add events to. |
+| `--events` | `100000` | How many events to create. |
+| `--days` | `90` | Spread events over this many days before now. |
+| `--users` | `5000` | How many distinct users the events come from. |
+| `--batch-size` | `10000` | Events per database insert. Larger batches are faster but use more memory. |
+| `--seed` | random | Makes the data repeatable: the same seed always creates the same events. Use one when comparing performance before and after a change. |
+
+Running the command again adds more events to the same project. To start over, use a new `--project` name.
 
 ## Layout
 
