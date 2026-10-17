@@ -1,3 +1,6 @@
+from datetime import timedelta
+
+from django.utils import timezone
 from rest_framework import serializers
 
 
@@ -23,3 +26,37 @@ class CaptureSerializer(serializers.Serializer):
 
     # noinspection PyArgumentList
     batch = EventInputSerializer(many=True, allow_empty=False, max_length=1000)
+
+
+MAX_TRENDS_DAYS = 365
+DEFAULT_TRENDS_DAYS = 7
+
+
+class TrendsQuerySerializer(serializers.Serializer):
+    event = serializers.CharField(max_length=200)
+    date_from = serializers.DateField(required=False)
+    date_to = serializers.DateField(required=False)
+
+    breakdown = serializers.CharField(max_length=200, default=None)
+    math = serializers.ChoiceField(choices=["total", "unique_users"], default="total")
+
+    def validate_breakdown(self, value):
+        if value is not None and "__" in value:
+            raise serializers.ValidationError("Property names must not contain '__'.")
+        return value
+
+    def validate(self, attrs):
+        date_to = attrs.get("date_to") or timezone.now().date()
+        # Minus 1 because the range includes date_to: the last 7 days = today + the 6 before it.
+        date_from = attrs.get("date_from") or date_to - timedelta(
+            days=DEFAULT_TRENDS_DAYS - 1
+        )
+        if date_from > date_to:
+            raise serializers.ValidationError("date_from must be before date_to.")
+        if (date_to - date_from).days + 1 > MAX_TRENDS_DAYS:
+            raise serializers.ValidationError(
+                f"This date range cannot be longer than {MAX_TRENDS_DAYS} days."
+            )
+        attrs["date_from"] = date_from
+        attrs["date_to"] = date_to
+        return attrs
