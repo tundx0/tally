@@ -28,7 +28,10 @@ def trends(project, event, date_from, date_to, breakdown=None, math="total"):
     if math == "unique_users":
         metric = Count("distinct_id", distinct=True)
     else:
-        metric = Count("id")
+        # COUNT(*) rather than COUNT(id): it needs no columns outside the
+        # (project, event, timestamp) index, so Postgres can answer from the index alone
+        # (index-only scan). See "Performance" in the README for measurements.
+        metric = Count("*")
 
     rows = (
         events.annotate(day=TruncDate("timestamp"))
