@@ -48,9 +48,7 @@ class TrendsQuerySerializer(serializers.Serializer):
     def validate(self, attrs):
         date_to = attrs.get("date_to") or timezone.now().date()
         # Minus 1 because the range includes date_to: the last 7 days = today + the 6 before it.
-        date_from = attrs.get("date_from") or date_to - timedelta(
-            days=DEFAULT_TRENDS_DAYS - 1
-        )
+        date_from = attrs.get("date_from") or date_to - timedelta(days=DEFAULT_TRENDS_DAYS - 1)
         if date_from > date_to:
             raise serializers.ValidationError("date_from must be before date_to.")
         if (date_to - date_from).days + 1 > MAX_TRENDS_DAYS:

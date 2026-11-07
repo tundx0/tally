@@ -3,10 +3,12 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.shortcuts import get_object_or_404
 
 from .authentication import ProjectApiKeyAuthentication
-from .models import Event, Person
-from .serializers import CaptureSerializer
+from .models import Event, Person, Project
+from .serializers import CaptureSerializer, TrendsQuerySerializer
+from .trends import trends
 
 
 @api_view(["GET"])
@@ -56,3 +58,15 @@ class CaptureView(APIView):
         Event.objects.bulk_create(events)
 
         return Response({"accepted": len(events)})
+
+
+class TrendsView(APIView):
+    """Daily counts of one event for a project the user is a member of."""
+
+    def get(self, request, project_id):
+        project = get_object_or_404(Project, id=project_id, members=request.user)
+
+        query = TrendsQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        params = query.validated_data
+        return Response({**params, "series": trends(project, **params)})
